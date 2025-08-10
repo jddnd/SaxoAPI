@@ -4,11 +4,11 @@ import yaml
 from fastapi import FastAPI, HTTPException, Body, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 from saxo_client import SaxoClient
 from strategies import PLANS
 from utils import pct_spread
+from models import Signal, TVAlert
 
 app = FastAPI(title="Saxo Auto Trader (Options)")
 
@@ -49,56 +49,9 @@ TV_SECRET = os.getenv("TV_SHARED_SECRET", CFG["security"].get("tv_shared_secret"
 
 saxo = SaxoClient(CFG)
 
-# ---- Models ----
-class Signal(BaseModel):
-    symbol: str
-    price: Optional[float] = None
-    rule: Optional[str] = None
-    first30Green: Optional[bool] = None
-    volumeStrong: Optional[bool] = None
-    BTC: Optional[float] = None
-    GOLD: Optional[float] = None
-    date: Optional[str] = None
-
-class TVAlert(BaseModel):
-    ticker: Optional[str] = None
-    price: Optional[float] = None
-    close: Optional[float] = None
-    rule: Optional[str] = None
-    BTC: Optional[float] = None
-    GOLD: Optional[float] = None
-    volumeStrong: Optional[bool] = None
-    first30Green: Optional[bool] = None
-    date: Optional[str] = None
-    secret: Optional[str] = None
-
 # ---- Helpers ----
 def condition_met(plan, sig: Signal) -> bool:
-    r = plan.entry_condition
-    p = sig.price or 0.0
-    if r == "price>=190":
-        return p >= 190.0
-    if r == "price>=430":
-        return p >= 430.0
-    if r == "price>=540":
-        return p >= 540.0
-    if r == "price>=75 AND volume_strong":
-        return (p >= 75.0) and bool(sig.volumeStrong)
-    if r == "date==2025-08-14 AND price>=76":
-        return (sig.date == "2025-08-14") and (p >= 76.0)
-    if r == "open>=7 AND first30_green":
-        return (p >= 7.0) and bool(sig.first30Green)
-    if r == "close>7.25":
-        return (p > 7.25)
-    if r == "dip_to_52_53":
-        return 52.0 <= p <= 53.0
-    if r == "pullback_to_13_2_13_4":
-        return 13.2 <= p <= 13.4
-    if r == "BTC>74500":
-        return (sig.BTC or 0.0) > 74500.0
-    if r == "GOLD>2500":
-        return (sig.GOLD or 0.0) > 2500.0
-    return False
+    return plan.entry_condition(sig)
 
 def lazy_account_key() -> Optional[str]:
     try:
